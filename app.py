@@ -5,6 +5,11 @@ from config import GROQ_API_KEY
 from rag_pipeline import build_vectorstore, build_rag_chain
 
 # Config
+
+if not GROQ_API_KEY:
+    st.error("❌ GROQ_API_KEY not found.")
+    st.stop()
+
 os.environ["GROQ_API_KEY"] = GROQ_API_KEY
 
 st.set_page_config(page_title="DocuTube AI", layout="wide")
