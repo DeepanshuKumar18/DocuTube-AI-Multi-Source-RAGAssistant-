@@ -4,6 +4,18 @@ DocuTube AI is a Retrieval-Augmented Generation (RAG) based application that let
 It answers questions strictly using the provided content.
 
 ---
+##  Live Demo
+👉 https://docutube-ai.streamlit.app/
+
+---
+
+### Home Page
+![Home Page](Home.png)
+
+### Chat Interface
+![Chat Interface](Chat.png)
+
+---
 
 ##  Features
 
