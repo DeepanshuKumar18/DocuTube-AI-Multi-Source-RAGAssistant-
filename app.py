@@ -1,25 +1,19 @@
 import os
 import streamlit as st
-
 from config import GROQ_API_KEY
 from rag_pipeline import build_vectorstore, build_rag_chain
 
-# Config
-
+# Configuration
 if not GROQ_API_KEY:
-    st.error("❌ GROQ_API_KEY not found.")
+    st.error("API key not found. Please set API in your environment.")
     st.stop()
 
 os.environ["GROQ_API_KEY"] = GROQ_API_KEY
 
 st.set_page_config(page_title="DocuTube AI", layout="wide")
 
-st.markdown(
-    """
-# 🤖 DocuTube AI  
-### Chat with YouTube Videos & PDFs using RAG
-"""
-)
+st.markdown("🤖 DocuTube AI")
+st.caption("Chat with YouTube Videos & PDFs using RAG")
 
 # Session State
 if "rag_chain" not in st.session_state:
@@ -28,9 +22,10 @@ if "rag_chain" not in st.session_state:
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
+
 # Sidebar
 with st.sidebar:
-    st.header("⚙️ Knowledge Source")
+    st.header("Knowledge Source")
 
     source_type = st.radio("Select source", ["YouTube", "PDF", "Both"])
 
@@ -39,24 +34,25 @@ with st.sidebar:
 
     if source_type in ["YouTube", "Both"]:
         youtube_url = st.text_input(
-            "🔗 YouTube URL", placeholder="https://www.youtube.com/watch?v=xxxx"
+            "YouTube URL", placeholder="https://www.youtube.com/watch?v=xxxx"
         )
 
     if source_type in ["PDF", "Both"]:
-        pdf_file = st.file_uploader("📄 Upload PDF", type=["pdf"])
+        pdf_file = st.file_uploader("Upload PDF", type=["pdf"])
 
     st.divider()
 
-    build_btn = st.button("🚀 Build Knowledge Base", use_container_width=True)
+    build_btn = st.button("Build Knowledge Base", use_container_width=True)
 
-    if st.button(" Clear Chat", use_container_width=True):
+    if st.button("Clear Chat", use_container_width=True):
         st.session_state.chat_history = []
         st.rerun()
+
 
 # Build Knowledge Base
 if build_btn:
     if source_type in ["YouTube", "Both"] and not youtube_url:
-        st.error("lease provide YouTube URL")
+        st.error("Please provide a YouTube URL")
         st.stop()
 
     if source_type in ["PDF", "Both"] and not pdf_file:
@@ -69,41 +65,53 @@ if build_btn:
         with open(pdf_path, "wb") as f:
             f.write(pdf_file.read())
 
-    with st.spinner("Building knowledge base..."):
-        vectorstore, doc_count, chunk_count = build_vectorstore(
-            youtube_url=youtube_url, pdf_path=pdf_path
-        )
+    with st.spinner("Processing documents..."):
+        try:
+            vectorstore, doc_count, chunk_count = build_vectorstore(
+                youtube_url=youtube_url,
+                pdf_path=pdf_path,
+            )
+        except ValueError as e:
+            # Expected loader errors (PDF unreadable, no transcript, etc.)
+            st.error(str(e))
+            st.stop()
+        except Exception:
+            st.error(
+                "Failed to process documents."
+                "Please try again or use a different source."
+            )
+            st.stop()
 
     st.session_state.rag_chain = build_rag_chain(vectorstore)
     st.session_state.chat_history = []
 
-    st.success("✅ Knowledge base ready")
+    st.success(
+        f"Knowledge base ready " f"({doc_count} documents, {chunk_count} chunks)"
+    )
 
-# Chat UI
+
+# UI
 if st.session_state.rag_chain:
 
-    # Show previous messages
     for chat in st.session_state.chat_history:
         with st.chat_message("user"):
             st.markdown(chat["question"])
-
         with st.chat_message("assistant"):
             st.markdown(chat["answer"])
 
-    # Chat input always at bottom
-    user_query = st.chat_input("Ask about the video or PDF...")
+    user_query = st.chat_input("Ask something about the content...")
 
     if user_query:
         with st.chat_message("user"):
             st.markdown(user_query)
 
-        with st.spinner("🤖 Thinking..."):
+        with st.spinner("Generating answer..."):
             try:
                 answer = st.session_state.rag_chain.invoke(user_query)
-            except Exception as e:
+            except Exception:
                 answer = (
-                    "**AI service temporarily unavailable**\n\n"
-                    "Please check your internet connection or try again in a few seconds."
+                    "**service temporarily unavailable**\n\n"
+                    "Please try again shortly."
                 )
 
         with st.chat_message("assistant"):

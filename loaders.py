@@ -5,7 +5,8 @@ from youtube_transcript_api._errors import NoTranscriptFound, TranscriptsDisable
 
 # YouTube Loader
 def load_youtube_docs(url: str):
-
+    
+    # Loads transcript from a YouTube video.
     try:
         loader = YoutubeLoader.from_youtube_url(
             url,
@@ -17,48 +18,47 @@ def load_youtube_docs(url: str):
 
         docs = loader.load()
 
-        # Empty transcript check
+        # Transcript exists but contains no readable text
         if not docs or all(not d.page_content.strip() for d in docs):
-            raise ValueError("Transcript is empty or unreadable")
+            raise ValueError("Transcript content is empty or unreadable.")
 
         return docs
 
+    # captions are disabled or missing
     except (NoTranscriptFound, TranscriptsDisabled):
         raise ValueError(
-            "❌ No transcript available for this video. " "Please try another video."
+            "Transcript is not available for this video."
         )
 
-    except Exception:
+    # Invalid URL, network failure, or unsupported video
+    except Exception :
         raise ValueError(
-            "❌ Failed to load YouTube transcript. "
-            "The video may not support transcripts."
+            "Unable to load YouTube transcript. "
+            "Please check the video URL and try again."
         )
 
 
 # PDF Loader
 def load_pdf_docs(path: str):
-    """
-    Load PDF safely.
-    Handles:
-    - Empty PDF
-    - Image-only PDF
-    """
+    # Loads text-based PDFs only.
+    # Scanned or image-only PDFs are not supported.
 
     try:
         loader = PyPDFLoader(path)
         docs = loader.load()
 
-        # Empty / scanned PDF check
+        # PDF parsed successfully but has no readable text
         if not docs or all(not d.page_content.strip() for d in docs):
             raise ValueError(
-                "❌ This PDF contains no readable text. "
+                "This PDF does not contain readable text. "
                 "Please upload a text-based PDF."
             )
 
         return docs
 
+    # corrupted file, or unsupported format
     except Exception:
         raise ValueError(
-            "❌ Failed to read the PDF file. "
+            "Unable to read the PDF file. "
             "The file may be corrupted or unsupported."
-        )
+        ) 

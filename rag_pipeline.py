@@ -16,39 +16,56 @@ from config import LLM_MODEL, EMBEDDING_MODEL
 from loaders import load_youtube_docs, load_pdf_docs
 
 
-# Build vectorstore
+# vectorstore builde
 @st.cache_resource(show_spinner=True)
-def build_vectorstore(youtube_url : str | None, pdf_path : str |None):
-    docs = []
+def _build_vectorstore_from_docs(docs):
 
-    if youtube_url:
-        docs.extend(load_youtube_docs(youtube_url))
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=1000,
+        chunk_overlap=200,
+        separators=["\n\n", "\n", ".", " "],
+    )
 
-    if pdf_path:
-        docs.extend(load_pdf_docs(pdf_path))
-
-    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     chunks = splitter.split_documents(docs)
 
     embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
 
     vectorstore = FAISS.from_documents(chunks, embeddings)
+
     return vectorstore, len(docs), len(chunks)
 
 
+# Public API: document → vectorstore
+def build_vectorstore(youtube_url: str | None, pdf_path: str | None):
+    docs = []
+
+    # Load YouTube transcript
+    if youtube_url:
+        docs.extend(load_youtube_docs(youtube_url))
+
+    # Load PDF documents
+    if pdf_path:
+        docs.extend(load_pdf_docs(pdf_path))
+
+    if not docs:
+        raise ValueError("No valid documents were loaded.")
+
+    # Call function ONLY after validation
+    return _build_vectorstore_from_docs(docs)
+
+
+# Build RAG Chain
 def build_rag_chain(vectorstore):
     retriever = vectorstore.as_retriever(
         search_type="similarity", search_kwargs={"k": 4}
     )
 
-    try:
-        llm = ChatGroq(
-            model="llama-3.1-8b-instant", temperature=0.2, timeout=30, max_retries=2
-        )
-    except Exception as e:
-        raise RuntimeError(
-            "Failed to initialize LLM. Please check API key or network."
-        ) from e
+    llm = ChatGroq(
+        model=LLM_MODEL,
+        temperature=0.2,
+        timeout=30,
+        max_retries=2,
+    )
 
     prompt = PromptTemplate(
         template="""
@@ -65,13 +82,13 @@ Question:
         input_variables=["context", "question"],
     )
 
-    def format_docs(docs):
+    def combine_docs(docs):
         return "\n\n".join(doc.page_content for doc in docs)
 
     chain = (
         RunnableParallel(
             {
-                "context": retriever | RunnableLambda(format_docs),
+                "context": retriever | RunnableLambda(combine_docs),
                 "question": RunnablePassthrough(),
             }
         )
